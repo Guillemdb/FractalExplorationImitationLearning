@@ -10,8 +10,8 @@ setup(
     url="https://github.com/Zeta36/FractalExplorationImitationLearning",
     download_url="https://github.com/Zeta36/FractalExplorationImitationLearning",
     install_requires=[
-        "plangym>=0.0.6",
-        "fragile>=0.0.40",
+        "plangym>=0.0.7",
+        "fragile>=0.0.41",
         "numpy>=1.16.2",
         "gym>=0.10.9",
         "pillow-simd>=7.0.0.post3",

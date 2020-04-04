@@ -1,5 +1,7 @@
 import argparse
 import sys
+
+import ray
 import tensorflow.compat.v1 as tf
 from tensorflow.python.keras.optimizers import Adam
 
@@ -19,21 +21,21 @@ from dqfd.model import DQFDNeuralNet
 def main():
     # We downsize the atari frame to 84 x 84 and feed the model 4 frames at a time for
     # a sense of direction and speed.
-    INPUT_SHAPE = (84, 84)
-    WINDOW_LENGTH = 4
+    input_shape = (84, 84)
+    window_length = 4
     # Runner parameters
-    EXPLORE_MEMORY_STEPS = 5
-    fractal_memory_size = 1000
+    fractal_memory_size = 200
     n_walkers = 32
-    n_workers = 8
-    max_epochs_per_game = 2000
+    n_workers = 2
+    n_swarms = 2
+    max_epochs_per_game = 110
     score_limit_per_game = 1000
     # Training parameters
-    n_training_steps = 1000
-    pretraining_steps = 500
-    target_model_update = 1000
-    n_max_episode_steps = 200000
-    rl_training_memory_max_size = 10000
+    n_training_steps = 50
+    pretraining_steps = 50
+    target_model_update = 10
+    n_max_episode_steps = 20000
+    rl_training_memory_max_size = 1000
     # testing
     n_episodes_test = 10
 
@@ -42,6 +44,8 @@ def main():
     parser.add_argument("--env-name", type=str, default="SpaceInvaders-v0")
     parser.add_argument("--weights", type=str, default=None)
     args = parser.parse_args()
+
+    ray.init(object_store_memory=78643200 * 100)  # 370Mb
 
     # Get the environment and extract the number of actions.
     env = create_plangym_env(args.env_name)
@@ -56,26 +60,27 @@ def main():
         args.env_name,
         memory_size=fractal_memory_size,
         n_walkers=n_walkers,
-        n_workers=n_workers,
+        n_workers_per_swarm=n_workers,
+        n_swarms=n_swarms,
         max_epochs=max_epochs_per_game,
         score_limit=score_limit_per_game,
     )
     explorer.run()
-    processed_memory = processor.process_demo_data(explorer.memory)
+    processed_explorer = processor.process_demo_data(explorer)
 
     memory = PartitionedMemory(
         limit=rl_training_memory_max_size,
-        swarm_memory=processed_memory,
+        runner=processed_explorer,
         alpha=0.4,
         start_beta=0.6,
         end_beta=0.6,
-        window_length=WINDOW_LENGTH,
+        window_length=window_length,
     )
 
     policy = EpsGreedyQPolicy(0.01)
 
     model = DQFDNeuralNet(
-        window_length=WINDOW_LENGTH, n_actions=explorer.n_actions, input_shape=INPUT_SHAPE
+        window_length=window_length, n_actions=explorer.n_actions, input_shape=input_shape
     )
     dqfd = DQfDAgent(
         model=model,
